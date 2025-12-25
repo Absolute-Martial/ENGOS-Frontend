@@ -1,12 +1,10 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useCopilotChat, useCopilotAction, useCopilotReadable } from '@copilotkit/react-core'
 import { useCopilotContext } from '@/providers/CopilotProvider'
-import { COPILOT_CONFIG } from '@/lib/copilot-config'
-import { useCopilotTools } from '@/hooks/useCopilotTools'
-import { useCopilotContextSync } from '@/hooks/useCopilotContext'
 
+// TODO: Remove or replace with a simpler context if needed
+// For now, we keep simpler types as we transition out of CopilotKit
 interface Message {
     id: string
     role: 'user' | 'assistant' | 'system'
@@ -16,11 +14,12 @@ interface Message {
 }
 
 export default function AIAssistant() {
+    // Initial message
     const [messages, setMessages] = useState<Message[]>([
         {
             id: '1',
             role: 'assistant',
-            content: COPILOT_CONFIG.chat.initialMessage,
+            content: "Hello! I'm here to help you with your studies and tasks.",
         }
     ])
     const [input, setInput] = useState('')
@@ -28,27 +27,8 @@ export default function AIAssistant() {
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
 
-    const { appState, addNotification, focusMode } = useCopilotContext()
-
-    // Register frontend tools
-    useCopilotTools()
-
-    // Sync app state with CopilotKit
-    useCopilotContextSync()
-
-    // CopilotKit chat hook
-    const { sendMessage: copilotSendMessage, isLoading: copilotLoading } = useCopilotChat({
-        onMessage: (message) => {
-            if (message.role === 'assistant') {
-                const assistantMessage: Message = {
-                    id: `msg-${Date.now()}`,
-                    role: 'assistant',
-                    content: message.content || '',
-                }
-                setMessages(prev => [...prev, assistantMessage])
-            }
-        }
-    })
+    // TODO: Review if we still need this context or if it should be refactored
+    const { appState } = useCopilotContext()
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -68,35 +48,30 @@ export default function AIAssistant() {
         setIsLoading(true)
 
         try {
-            // Try CopilotKit first, fallback to direct API
-            await copilotSendMessage(userMessage.content)
-        } catch (error) {
-            // Fallback to direct backend API
-            try {
-                const response = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: userMessage.content })
-                })
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: userMessage.content })
+            })
 
-                const data = await response.json()
+            const data = await response.json()
 
-                const assistantMessage: Message = {
-                    id: `msg-${Date.now() + 1}`,
-                    role: 'assistant',
-                    content: data.response || "I processed your request.",
-                    toolCalls: data.tool_calls,
-                }
-
-                setMessages(prev => [...prev, assistantMessage])
-            } catch (fallbackError) {
-                const errorMessage: Message = {
-                    id: `msg-${Date.now() + 1}`,
-                    role: 'assistant',
-                    content: "Connection error. Make sure the backend is running on port 8000.",
-                }
-                setMessages(prev => [...prev, errorMessage])
+            const assistantMessage: Message = {
+                id: `msg-${Date.now() + 1}`,
+                role: 'assistant',
+                content: data.response || "I processed your request.",
+                toolCalls: data.tool_calls,
             }
+
+            setMessages(prev => [...prev, assistantMessage])
+        } catch (error) {
+            console.error(error)
+            const errorMessage: Message = {
+                id: `msg-${Date.now() + 1}`,
+                role: 'assistant',
+                content: "Connection error. Make sure the backend is running on port 8000.",
+            }
+            setMessages(prev => [...prev, errorMessage])
         } finally {
             setIsLoading(false)
         }
@@ -109,33 +84,7 @@ export default function AIAssistant() {
         }
     }
 
-    const handleSuggestionClick = (prompt: string) => {
-        setInput(prompt)
-        inputRef.current?.focus()
-    }
-
-    // Minimize view in focus mode
-    if (focusMode) {
-        return (
-            <div className="glass rounded-2xl p-4">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-                        <span className="text-sm text-zinc-400">Focus Mode Active</span>
-                    </div>
-                    <button
-                        onClick={() => {
-                            const { setFocusMode } = useCopilotContext()
-                            setFocusMode(false)
-                        }}
-                        className="text-xs px-2 py-1 rounded bg-surface-light text-zinc-400 hover:text-white transition"
-                    >
-                        Exit Focus
-                    </button>
-                </div>
-            </div>
-        )
-    }
+    // Removed focus mode logic related to CopilotContext toggles for now
 
     return (
         <div className="glass rounded-2xl flex flex-col h-[600px]">
@@ -147,13 +96,13 @@ export default function AIAssistant() {
                     </div>
                     <div className="flex-1">
                         <h3 className="font-semibold text-white">AI Assistant</h3>
-                        <p className="text-xs text-zinc-400">Powered by CopilotKit</p>
+                        <p className="text-xs text-zinc-400">Powered by LangGraph</p>
                     </div>
                     {/* Status indicator */}
                     <div className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full ${isLoading || copilotLoading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`}></div>
+                        <div className={`w-2 h-2 rounded-full ${isLoading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`}></div>
                         <span className="text-xs text-zinc-500">
-                            {isLoading || copilotLoading ? 'Thinking...' : 'Ready'}
+                            {isLoading ? 'Thinking...' : 'Ready'}
                         </span>
                     </div>
                 </div>
@@ -173,7 +122,7 @@ export default function AIAssistant() {
                         </span>
                     )}
                     {appState.tasks.length > 0 && (
-                        <span>{appState.tasks.filter(t => t.status !== 'completed').length} tasks</span>
+                        <span>{appState.tasks.filter((t: any) => t.status !== 'completed').length} tasks</span>
                     )}
                 </div>
             </div>
@@ -219,7 +168,7 @@ export default function AIAssistant() {
                 ))}
 
                 {/* Typing indicator */}
-                {(isLoading || copilotLoading) && (
+                {isLoading && (
                     <div className="flex justify-start">
                         <div className="bg-surface-light rounded-2xl rounded-bl-md px-4 py-3">
                             <div className="flex gap-1">
@@ -234,21 +183,6 @@ export default function AIAssistant() {
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* Quick Suggestions */}
-            <div className="px-4 py-2 border-t border-white/10">
-                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                    {COPILOT_CONFIG.chat.suggestions.map((suggestion, i) => (
-                        <button
-                            key={i}
-                            onClick={() => handleSuggestionClick(suggestion.prompt)}
-                            className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full bg-surface-light hover:bg-primary/30 text-zinc-300 hover:text-white transition"
-                        >
-                            {suggestion.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
             {/* Input */}
             <div className="p-4 border-t border-white/10">
                 <div className="flex gap-2">
@@ -258,13 +192,13 @@ export default function AIAssistant() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder={COPILOT_CONFIG.chat.placeholder}
+                        placeholder="Ask anything..."
                         className="flex-1 bg-surface-light rounded-xl px-4 py-3 text-white placeholder-zinc-500 outline-none focus:ring-2 focus:ring-primary/50 transition"
-                        disabled={isLoading || copilotLoading}
+                        disabled={isLoading}
                     />
                     <button
                         onClick={sendMessage}
-                        disabled={isLoading || copilotLoading || !input.trim()}
+                        disabled={isLoading || !input.trim()}
                         className="px-4 py-3 rounded-xl gradient-primary text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:opacity-90 transition"
                     >
                         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -276,3 +210,4 @@ export default function AIAssistant() {
         </div>
     )
 }
+
